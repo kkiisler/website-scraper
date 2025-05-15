@@ -1,45 +1,54 @@
 #!/usr/bin/env python3
 """
-Multi-threaded crawler: Crawl a domain and dump page data to JSON.
-Usage: python scrape_site.py https://example.com
+Crawl a website and dump all page data to JSON.
+Run:  python scrape_site.py https://example.com
 """
 
 import json
 import re
 import sys
-import threading
+import hashlib
 from pathlib import Path
 from urllib.parse import urljoin, urlparse, urldefrag
-from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import requests
 from bs4 import BeautifulSoup
 from tqdm import tqdm
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
-# Configuration
-MAX_WORKERS = 10       # Number of threads
-MAX_PAGES = None       # Limit total pages
-TIMEOUT = 15           # HTTP timeout
+# Constants
+OUTPUT_FILE = Path("site_content.json")
+HEADERS = {"User-Agent": "WebsiteScraper/1.0 (+https://github.com/your-repo)"}
+MAX_PAGES = None
+TIMEOUT = 15  # seconds
 
-seen_urls = set()
-seen_lock = threading.Lock()
+# ----------------------------------------------------------------------------
 
 def normalize_url(url, base, domain):
-    url, _ = urldefrag(urljoin(base, url))
+    url, _ = urldefrag(urljoin(base, url))  # drop #fragment, make absolute
     parsed = urlparse(url)
-    if parsed.scheme not in ("http", "https"):
+    if parsed.scheme not in ("http", "https") or parsed.netloc != domain:
         return None
-    return url if parsed.netloc == domain else None
+    # Normalize paths like /index.html
+    norm_path = re.sub(r"/index\.html?$", "/", parsed.path).rstrip("/")
+    normalized = parsed._replace(path=norm_path)
+    return normalized.geturl()
 
-def visible_text(soup):
-    for tag in soup(["script", "style", "noscript", "template"]):
+
+def visible_text(html: BeautifulSoup):
+    for tag in html(["script", "style", "noscript", "template"]):
         tag.decompose()
-    texts = [tag.get_text(strip=True, separator=" ") for tag in soup.find_all(["h1", "h2", "h3", "h4", "h5", "h6", "p", "li"])]
-    return " ".join(t for t in texts if t)
+    texts = []
+    for tag in html.find_all(["h1", "h2", "h3", "h4", "h5", "h6", "p", "li"]):
+        text = tag.get_text(strip=True, separator=" ")
+        if text:
+            texts.append(text)
+    return " ".join(texts)
 
-def scrape_page(url, headers):
+
+def scrape_page(url, domain):
     try:
-        resp = requests.get(url, headers=headers, timeout=TIMEOUT)
+        resp = requests.get(url, headers=HEADERS, timeout=TIMEOUT)
         resp.raise_for_status()
         soup = BeautifulSoup(resp.text, "html.parser")
 
@@ -52,69 +61,67 @@ def scrape_page(url, headers):
         ]
         text = visible_text(soup)
 
-        return {
+        page_data = {
             "url": url,
             "title": soup.title.string.strip() if soup.title else "",
             "description": meta_desc["content"].strip() if meta_desc else "",
             "text": text,
             "images": images,
             "files": files,
-            "links": [normalize_url(a["href"], url, urlparse(url).netloc) for a in soup.find_all("a", href=True)]
         }
-    except Exception as exc:
-        print(f"[skip] {url} — {exc}", file=sys.stderr)
-        return None
+
+        # Also return soup for link discovery
+        return page_data, soup
+
+    except Exception as e:
+        print(f"[skip] {url} — {e}", file=sys.stderr)
+        return None, None
+
 
 def crawl(start_url):
-    domain = urlparse(start_url).netloc
-    headers = {"User-Agent": f"{domain}-Crawler/1.0 (+https://github.com/your-repo)"}
-    output_file = Path(f"{domain.replace('.', '_')}_content.json")
-
-    pages = []
+    parsed_start = urlparse(start_url)
+    domain = parsed_start.netloc
+    seen_urls = set()
+    seen_hashes = set()
     stack = [start_url]
+    pages = []
+
     pbar = tqdm(total=0, unit="page", desc="Crawled")
 
-    with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
-        while stack:
-            # Deduplicate stack entries
-            with seen_lock:
-                stack = [url for url in stack if url not in seen_urls]
-                for url in stack:
-                    seen_urls.add(url)
+    while stack:
+        url = stack.pop()
+        if url in seen_urls:
+            continue
 
-            if not stack:
-                break
+        page_data, soup = scrape_page(url, domain)
+        seen_urls.add(url)
 
-            # Limit how many URLs to process at once
-            batch = stack[:MAX_WORKERS]
-            stack = stack[MAX_WORKERS:]
+        if not page_data or not soup:
+            continue
 
-            futures = {executor.submit(scrape_page, url, headers): url for url in batch}
-            for future in as_completed(futures):
-                result = future.result()
-                if not result:
-                    continue
-                pages.append(result)
-                pbar.update(1)
+        content_hash = hashlib.sha256(page_data["text"].encode("utf-8")).hexdigest()
+        if content_hash in seen_hashes:
+            continue
+        seen_hashes.add(content_hash)
 
-                for link in result["links"]:
-                    if link:
-                        with seen_lock:
-                            if link not in seen_urls:
-                                stack.append(link)
+        pages.append(page_data)
+        pbar.update(1)
 
-                if MAX_PAGES and len(pages) >= MAX_PAGES:
-                    break
+        for a in soup.find_all("a", href=True):
+            nxt = normalize_url(a["href"], url, domain)
+            if nxt and nxt not in seen_urls:
+                stack.append(nxt)
 
-    # Save results
-    for page in pages:
-        page.pop("links", None)  # Remove raw link list from output
-    output_file.write_text(json.dumps(pages, ensure_ascii=False, indent=2))
+        if MAX_PAGES and len(pages) >= MAX_PAGES:
+            break
+
+    OUTPUT_FILE.write_text(json.dumps(pages, ensure_ascii=False, indent=2))
     pbar.close()
-    print(f"\nDone. {len(pages)} pages saved to {output_file.resolve()}")
+    print(f"\nDone. {len(pages)} pages saved to {OUTPUT_FILE.resolve()}")
+
 
 if __name__ == "__main__":
-    if len(sys.argv) < 2:
-        print("Usage: python scrape_site.py https://example.com")
+    if len(sys.argv) != 2:
+        print("Usage: python scrape_site.py https://example.com", file=sys.stderr)
         sys.exit(1)
     crawl(sys.argv[1])
