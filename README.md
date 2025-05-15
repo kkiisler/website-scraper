@@ -1,61 +1,52 @@
-# website-scraper
-
-Here’s a detailed README.md for your multi-threaded Python website crawler, including full setup instructions, usage, optional virtual environment, and output details.
+Great! Here’s the updated README.md tailored for your repo website-scraper:
 
 ⸻
 
 
-# 🕸️ Multi-Threaded Website Crawler (Python 3)
+# 🕸️ Website Scraper
 
-This is a multi-threaded web crawler that recursively scrapes all accessible pages from a given domain, extracting page metadata, visible text content, image links, and downloadable file URLs.
-
-Output is saved as a structured JSON file.
+**website-scraper** is a multi-threaded Python crawler that recursively scans a single domain, extracting visible text, page metadata, images, and downloadable files. Results are saved in a clean JSON format.
 
 ---
 
-## 📦 Features
+## 🚀 Features
 
-- Multi-threaded crawling using `ThreadPoolExecutor`
-- Domain-restricted recursive crawling
-- Extracts:
-  - Page title
-  - Meta description
-  - Visible text (`h1–h6`, `p`, `li`)
-  - All image URLs
-  - All downloadable file URLs (e.g., PDF, DOCX, ZIP)
-- Deduplicates visited URLs
-- Saves all data in `example_com_content.json`
+- 🔄 Multi-threaded crawling using `ThreadPoolExecutor`
+- 🌐 Stays within the target domain
+- 🧠 Extracts:
+  - Page title & meta description
+  - Visible text content (`h1–h6`, `p`, `li`)
+  - Image URLs (`<img src=...>`)
+  - File links (e.g., `.pdf`, `.zip`, `.docx`)
+- ✅ Deduplicates visited URLs
+- 📁 Outputs to a single `.json` file per domain
 
 ---
 
 ## 🛠️ Setup
 
-### 1. Install Python 3.9 or newer
-
-Make sure Python is installed:
+### 1. Install Python (3.9+)
 
 ```bash
 python3 --version
 
-2. Clone or download the script
+2. Clone the repository
 
-git clone https://github.com/yourname/multi-threaded-crawler.git
-cd multi-threaded-crawler
+git clone https://github.com/your-username/website-scraper.git
+cd website-scraper
 
-Or just save the script as scrape_site.py.
-
-3. (Optional but recommended) Use a virtual environment
+3. (Optional but recommended) Create a virtual environment
 
 python3 -m venv .venv
-source .venv/bin/activate      # on Linux/macOS
+source .venv/bin/activate     # macOS/Linux
 # OR
-.venv\Scripts\activate.bat     # on Windows
+.venv\Scripts\activate.bat    # Windows
 
-4. Install required packages
+4. Install dependencies
 
 pip install -r requirements.txt
 
-If you don’t have requirements.txt, install directly:
+If you don’t have requirements.txt, install manually:
 
 pip install requests beautifulsoup4 tqdm
 
@@ -64,37 +55,34 @@ pip install requests beautifulsoup4 tqdm
 
 ▶️ Usage
 
-Basic usage
+Crawl a website:
 
 python scrape_site.py https://example.com
+
+This will crawl all internal pages on example.com and save the output to:
+
+example_com_content.json
 
 Example:
 
 python scrape_site.py https://pilvio.com
 
-Optional: Cap the number of pages
-
-You can modify the MAX_PAGES = ... value in the script if you want to limit crawl depth.
 
 ⸻
 
-🧪 Output
-	•	Creates a file like: example_com_content.json
-	•	JSON format:
+🧾 Output Format
 
 [
   {
     "url": "https://example.com/page",
-    "title": "Example Page",
-    "description": "Short meta description",
-    "text": "All visible text content...",
+    "title": "Welcome to Example",
+    "description": "Example description",
+    "text": "Visible text content from the page...",
     "images": [
-      "https://example.com/images/logo.png",
-      ...
+      "https://example.com/assets/logo.png"
     ],
     "files": [
-      "https://example.com/files/menu.pdf",
-      ...
+      "https://example.com/files/brochure.pdf"
     ]
   },
   ...
@@ -103,32 +91,36 @@ You can modify the MAX_PAGES = ... value in the script if you want to limit craw
 
 ⸻
 
-🧹 Clean up
+🔧 Configuration
 
-To deactivate the virtual environment:
+Edit the following values in scrape_site.py if needed:
+	•	MAX_WORKERS = 10 → Number of threads
+	•	MAX_PAGES = None → Limit the number of pages (e.g. 200)
+	•	TIMEOUT = 15 → HTTP timeout in seconds
+
+⸻
+
+🧹 Cleanup
+
+To deactivate your virtual environment:
 
 deactivate
 
-To delete .venv:
+To remove it:
 
 rm -rf .venv
 
 
 ⸻
 
-🧱 Requirements
-	•	Python ≥ 3.9
-	•	Packages:
-	•	requests
-	•	beautifulsoup4
-	•	tqdm
+📄 License
+
+MIT License © 2025 Kaur Kiisler
 
 ⸻
 
-📖 License
+🧠 Notes
+	•	This tool does not obey robots.txt
+	•	Use responsibly on public websites
+	•	Consider adding robots.txt respect if you plan to share or deploy publicly
 
-MIT License © 2025 Your Name
-
----
-
-Let me know if you'd like me to package this into a `.zip` along with the `.py` script and `requirements.txt`.
